@@ -1,6 +1,6 @@
 ################################################################################
 # This Dockerfile was generated from the template at distribution/src/docker/Dockerfile
-#
+# Modified: using ubuntu:bionic as base image
 # Beginning of multi stage Dockerfile
 ################################################################################
 
@@ -10,7 +10,7 @@
 # Set gid=0 and make group perms==owner perms
 ################################################################################
 
-FROM centos:7 AS builder
+FROM ubuntu:bionic AS builder
 
 # `tini` is a tiny but valid init for containers. This is used to cleanly
 # control how ES and any child processes are shut down.
@@ -19,6 +19,7 @@ FROM centos:7 AS builder
 # gpg, but the keyservers are slow to return the key and this can fail the
 # build. Instead, we check the binary against the published checksum.
 RUN set -eux ; \
+    apt-get update && apt-get install -y curl ; \
     \
     tini_bin="" ; \
     case "$(arch)" in \
@@ -36,7 +37,7 @@ RUN set -eux ; \
 ENV PATH /usr/share/elasticsearch/bin:$PATH
 
 RUN groupadd -g 1000 elasticsearch && \
-    adduser -u 1000 -g 1000 -d /usr/share/elasticsearch elasticsearch
+    useradd -u 1000 -g 1000 -d /usr/share/elasticsearch elasticsearch
 
 WORKDIR /usr/share/elasticsearch
 
@@ -59,24 +60,24 @@ RUN chmod 0660 config/elasticsearch.yml config/log4j2.properties
 # Add entrypoint
 ################################################################################
 
-FROM centos:7
+FROM ubuntu:bionic
 
 ENV ELASTIC_CONTAINER true
 
 COPY --from=builder /tini /tini
+COPY --from=builder --chown=1000:0 /usr/share/elasticsearch /usr/share/elasticsearch
 
-RUN for iter in {1..10}; do yum update --setopt=tsflags=nodocs -y && \
-    yum install --setopt=tsflags=nodocs -y nc shadow-utils zip unzip && \
-    yum clean all && exit_code=0 && break || exit_code=$? && echo "yum error: retry $iter in 10s" && sleep 10; done; \
+RUN for iter in {1..10}; do apt-get update -y && \
+    apt-get install -y netcat libvshadow-utils zip unzip && \
+    apt-get clean all && exit_code=0 && break || exit_code=$? && echo "apt-get error: retry $iter in 10s" && sleep 10; done; \
     (exit $exit_code)
 
 RUN groupadd -g 1000 elasticsearch && \
-    adduser -u 1000 -g 1000 -G 0 -d /usr/share/elasticsearch elasticsearch && \
+    useradd -u 1000 -g 1000 -G 0 -d /usr/share/elasticsearch elasticsearch && \
     chmod 0775 /usr/share/elasticsearch && \
     chgrp 0 /usr/share/elasticsearch
 
 WORKDIR /usr/share/elasticsearch
-COPY --from=builder --chown=1000:0 /usr/share/elasticsearch /usr/share/elasticsearch
 
 # Replace OpenJDK's built-in CA certificate keystore with the one from the OS
 # vendor. The latter is superior in several ways.
@@ -94,26 +95,6 @@ RUN chmod g=u /etc/passwd && \
 RUN find / -xdev -perm -4000 -exec chmod ug-s {} +
 
 EXPOSE 9200 9300
-
-LABEL org.label-schema.build-date="2020-09-23T00:45:33.626720Z" \
-  org.label-schema.license="Elastic-License" \
-  org.label-schema.name="Elasticsearch" \
-  org.label-schema.schema-version="1.0" \
-  org.label-schema.url="https://www.elastic.co/products/elasticsearch" \
-  org.label-schema.usage="https://www.elastic.co/guide/en/elasticsearch/reference/index.html" \
-  org.label-schema.vcs-ref="d34da0ea4a966c4e49417f2da2f244e3e97b4e6e" \
-  org.label-schema.vcs-url="https://github.com/elastic/elasticsearch" \
-  org.label-schema.vendor="Elastic" \
-  org.label-schema.version="7.9.2" \
-  org.opencontainers.image.created="2020-09-23T00:45:33.626720Z" \
-  org.opencontainers.image.documentation="https://www.elastic.co/guide/en/elasticsearch/reference/index.html" \
-  org.opencontainers.image.licenses="Elastic-License" \
-  org.opencontainers.image.revision="d34da0ea4a966c4e49417f2da2f244e3e97b4e6e" \
-  org.opencontainers.image.source="https://github.com/elastic/elasticsearch" \
-  org.opencontainers.image.title="Elasticsearch" \
-  org.opencontainers.image.url="https://www.elastic.co/products/elasticsearch" \
-  org.opencontainers.image.vendor="Elastic" \
-  org.opencontainers.image.version="7.9.2"
 
 ENTRYPOINT ["/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 # Dummy overridable parameter parsed by entrypoint
