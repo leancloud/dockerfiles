@@ -48,7 +48,7 @@ fi
 # is idempotent.
 source /usr/share/elasticsearch/bin/elasticsearch-env-from-file
 
-if [[ -f bin/elasticsearch-users ]]; then
+if [[ -f /usr/share/elasticsearch/bin/elasticsearch-users ]]; then
   # Check for the ELASTIC_PASSWORD environment variable to set the
   # bootstrap password for Security.
   #
